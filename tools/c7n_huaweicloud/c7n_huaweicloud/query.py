@@ -6,7 +6,7 @@ import jmespath
 import sys
 
 from c7n.actions import ActionRegistry
-from c7n.filters import FilterRegistry
+from c7n.filters import FilterRegistry, ValueFilter
 from c7n.manager import ResourceManager
 from c7n.query import sources, MaxResourceLimit
 from c7n.utils import local_session
@@ -55,17 +55,20 @@ class ResourceQuery:
             sys.exit(1)
         return resources
 
-    def _pagination_limit_offset(self, m, enum_op, path):
+    def _pagination_limit_offset(self, m, enum_op, path, **params):
         session = local_session(self.session_factory)
-        client = session.client(m.service)
+        client_version = m.client_version if hasattr(m, 'client_version') else None
+        client = session.client(m.service, client_version)
 
         offset = 0
         limit = DEFAULT_LIMIT_SIZE
         resources = []
         while 1:
-            request = session.request(m.service)
+            request = session.request(m.service, enum_op)
             request.limit = limit
             request.offset = offset
+            if 'id' in params:
+                request.id = params.get('id')
             response = self._invoke_client_enum(client, enum_op, request)
             res = jmespath.search(path, eval(
                 str(response).replace('null', 'None').replace('false', 'False').replace('true', 'True')))
@@ -89,6 +92,7 @@ class ResourceQuery:
 
     def _pagination_maxitems_marker(self, m, enum_op, path):
         session = local_session(self.session_factory)
+        client_version = m.client_version if hasattr(m, 'client_version') else None
         client = session.client(m.service)
 
         marker, count = 0, 0
@@ -122,6 +126,7 @@ class ResourceQuery:
 
     def _pagination_limit_marker(self, m, enum_op, path, marker_pagination: MarkerPagination=None):
         session = local_session(self.session_factory)
+        client_version = m.client_version if hasattr(m, 'client_version') else None
         client = session.client(m.service)
 
         if not marker_pagination:
@@ -231,9 +236,9 @@ class QueryResourceManager(ResourceManager, metaclass=QueryMeta):
             return sources[source_type](self)
         raise KeyError("Invalid Source %s" % source_type)
 
-    def get_client(self):
+    def get_client(self, client_version=None):
         session = local_session(self.session_factory)
-        client = session.client(self.resource_type.service)
+        client = session.client(self.resource_type.service, client_version)
         return client
 
     def get_model(self):
@@ -256,6 +261,7 @@ class QueryResourceManager(ResourceManager, metaclass=QueryMeta):
             return {'filter': self.data.get('query')}
 
     def resources(self, query=None):
+        log.info("query is %s", query)
         q = query or self.get_resource_query()
         key = self.get_cache_key(q)
         resources = None

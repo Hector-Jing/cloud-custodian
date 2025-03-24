@@ -15,6 +15,10 @@ from huaweicloudsdkevs.v2.region.evs_region import EvsRegion
 from huaweicloudsdkiam.v3 import IamClient
 from huaweicloudsdkiam.v3.region.iam_region import IamRegion
 from huaweicloudsdkvpc.v2 import *
+from huaweicloudsdkvpc.v3.region.vpc_region import VpcRegion
+from huaweicloudsdkvpc.v3 import *
+from huaweicloudsdkvpc.v2.vpc_client import VpcClient as VpcClientV2
+from huaweicloudsdkvpc.v3.vpc_client import VpcClient as VpcClientV3
 from huaweicloudsdktms.v1 import *
 from huaweicloudsdktms.v1.region.tms_region import TmsRegion
 
@@ -40,10 +44,11 @@ class Session:
             log.error('No secret access key set. Specify a default via HUAWEI_SECRET_ACCESS_KEY')
             sys.exit(1)
 
-    def client(self, service):
+    def client(self, service, client_version=None):
         credentials = BasicCredentials(self.ak, self.sk, os.getenv('HUAWEI_PROJECT_ID'))
         if service == 'vpc':
-            client = VpcClient.new_builder() \
+            vpc_client = VpcClientV2() if client_version == 'v2' else VpcClientV3()
+            client = vpc_client.new_builder() \
                 .with_credentials(credentials) \
                 .with_region(VpcRegion.value_of(self.region)) \
                 .build()
@@ -61,7 +66,7 @@ class Session:
             globalCredentials = GlobalCredentials(self.ak, self.sk)
             client = TmsClient.new_builder() \
                 .with_credentials(globalCredentials) \
-                .with_region(TmsRegion.value_of(self.region)) \
+                .with_region(TmsRegion.value_of('cn-north-4')) \
                 .build()
         elif service == 'iam':
             globalCredentials = GlobalCredentials(self.ak, self.sk)
@@ -78,9 +83,9 @@ class Session:
 
         return client
 
-    def request(self, service):
+    def request(self, service, enum_op=None):
         if service == 'vpc':
-            request = ListVpcsRequest()
+            request = ListSecurityGroupsRequest()
         elif service == 'evs':
             request = ListVolumesRequest()
         elif service == 'config':
